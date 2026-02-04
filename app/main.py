@@ -26,11 +26,11 @@ init_db()
 # Initial fetch on startup
 download_and_parse_pdf()
 @app.get("/mealplan")
-def get_mealplan():
+def get_mealplan(week: int, year: int):
     """
     Retrieve the meal plan for a specific week and year.
     """
-    data = fetch_mealplan(2026,6)
+    data = fetch_mealplan(week=week, year=year)
     if not data:
         return {"success": False, "message": "Meal plan not available"}
     return {"success": True, "data": data}

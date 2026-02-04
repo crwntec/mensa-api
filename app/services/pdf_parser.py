@@ -25,39 +25,43 @@ def extract_meals(pdf_path: str) -> Mealplan:
     
     Args:
         pdf_path (str): Path to the PDF file.
-
     Returns:
         Mealplan: Parsed meal plan data.
     """
+    all_days = {}
+    week = None
+    year = None
+    
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
             text = page.extract_text() or ""
-
-            # Extract week number (ISO week)
-            week_match = re.search(r"KW\s*(\d+)", text)
-            if not week_match:
-                continue
-            week = int(week_match.group(1))
-
-            # Extract first date to determine year
-            date_match = re.search(r"\d{2}\.\d{2}\.\d{2,4}", text)
-            if date_match:
-                parsed_date = datetime.strptime(date_match.group(), "%d.%m.%y")
-                year = parsed_date.year
-            else:
-                year = datetime.now().year
-
+            
+            if week is None:
+                week_match = re.search(r"KW\s*(\d+)", text)
+                if week_match:
+                    week = int(week_match.group(1))
+            
+            if year is None:
+                date_match = re.search(r"\d{2}\.\d{2}\.\d{2,4}", text)
+                if date_match:
+                    parsed_date = datetime.strptime(date_match.group(), "%d.%m.%y")
+                    year = parsed_date.year
+                else:
+                    year = datetime.now().year
+            
             for table in page.extract_tables() or []:
                 days = parse_table(table)
                 if days:
-                    return Mealplan(
-                        year=year,
-                        week=week,
-                        days=days
-                    )
-
-    return {}
-
+                    all_days.update(days)
+    
+    if all_days and week and year:
+        return Mealplan(
+            year=year,
+            week=week,
+            days=all_days
+        )
+    
+    return None
 
 
 def parse_table(table: List[List[str]]) -> Dict[str, DayMeals]:
@@ -72,7 +76,6 @@ def parse_table(table: List[List[str]]) -> Dict[str, DayMeals]:
     if not table or len(table) < 2:
         return {}
     
-    # Identify header row with days
     header_row = None
     for i, row in enumerate(table):
         if row and any(day in str(cell) for day in ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'] for cell in row if cell):
@@ -82,7 +85,6 @@ def parse_table(table: List[List[str]]) -> Dict[str, DayMeals]:
     if header_row is None:
         return {}
     
-    # Extract days
     days = []
     for cell in table[header_row]:
         if not cell:
@@ -100,7 +102,6 @@ def parse_table(table: List[List[str]]) -> Dict[str, DayMeals]:
     if not days:
         return {}
     
-    # Initialize result dict
     result = {d["date"]: {"weekday": d["weekday"], "meals": {}} for d in days}
     
     current_meals = {i: [] for i in range(len(days))}
@@ -113,7 +114,6 @@ def parse_table(table: List[List[str]]) -> Dict[str, DayMeals]:
         
         first_cell = str(row[0]).strip() if row[0] else ""
         
-        # Check for meal category
         if any(cat in first_cell for cat in ['Tagesgericht', 'Vegetarisch', 'Pizza & Pasta']):
             category = next((cat for cat in ['Tagesgericht', 'Vegetarisch', 'Pizza & Pasta'] if cat in first_cell), None)
             current_meals = {i: [] for i in range(len(days))}
@@ -124,10 +124,8 @@ def parse_table(table: List[List[str]]) -> Dict[str, DayMeals]:
                     meal_text = str(cell).strip()
                     current_meals[idx].append(meal_text)
             
-            # After processing all rows for this category, join meals into single string
             for idx in range(len(days)):
                 if current_meals[idx]:
-                    # Join multiple meal parts with a space or newline
                     combined_meal = " ".join(current_meals[idx])
                     result[days[idx]["date"]]["meals"][category] = combined_meal
             
