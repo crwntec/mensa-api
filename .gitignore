@@ -2,6 +2,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 .env
-tmp/
+archive/
 .pytest_cache/
 *.db
