@@ -12,10 +12,11 @@ COPY Pipfile Pipfile.lock ./
 RUN pipenv install --deploy --system
 
 # Copy application
-COPY ./app ./app
+COPY ./app .
 
 # Create data directory
-RUN mkdir -p /app/data/pdfs
+RUN mkdir -p ./archive
 
+EXPOSE 8000
 # Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
