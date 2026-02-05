@@ -4,10 +4,7 @@ import re
 import requests
 from database import create_mealplan, fetch_mealplan
 from services.pdf_parser import extract_meals
-
-# Base URL pattern - the week number needs to be dynamically inserted
-PDF_URL_TEMPLATE = "https://www.malteser-st-bernhard-gymnasium.de/fileadmin/Files_sites/Fachbereiche/St_Bernhard_Gymnasium/pdf/Mensaplaene/Speisenplan-KW_{week:02d}-St.B_-_Kopie-zusammengefuegt.pdf"
-
+from bs4 import BeautifulSoup
 UPDATE_INTERVAL_HOURS = 24
 
 def get_current_week_range():
@@ -32,6 +29,21 @@ def get_current_week_range():
     
     return first_week, second_week
 
+def scrape_pdf_url():
+    """
+    Scrape the PDF URL from the website.
+    """
+    BASE_URL = "https://www.malteser-st-bernhard-gymnasium.de/"
+    page = requests.get(BASE_URL)
+    soup = BeautifulSoup(page.content, "html.parser")
+    mensa_link = soup.find('h3', string='Mensa Angebot der nächsten 2 Wochen').find_parent('a')
+    
+    if mensa_link:
+        return BASE_URL + mensa_link['href']
+    else:
+        print(f"Scraping failed: No link found")
+        return None
+
 def download_and_parse_pdf():
     """
     Download the latest PDF from the given URL and parse it.
@@ -51,7 +63,9 @@ def download_and_parse_pdf():
             return True
         
         # Construct PDF URL with the first week number
-        pdf_url = PDF_URL_TEMPLATE.format(week=first_week)
+        pdf_url = scrape_pdf_url()
+        if not pdf_url:
+            return False
         
         print(f"[{datetime.now()}] Downloading PDF for weeks {first_week}-{second_week} from {pdf_url} ...")
         response = requests.get(pdf_url, timeout=10)
@@ -117,20 +131,6 @@ def download_and_parse_pdf():
     except Exception as e:
         print(f"[{datetime.now()}] Error parsing PDF: {e}")
         return False
-
-def get_week_url(week_number):
-    """
-    Get the PDF URL for a specific week.
-    Useful for manually fetching specific weeks.
-    
-    Args:
-        week_number (int): ISO week number
-    Returns:
-        str: PDF URL
-    """
-    # Round down to nearest even number to get the PDF's week
-    base_week = week_number if week_number % 2 == 0 else week_number - 1
-    return PDF_URL_TEMPLATE.format(week=base_week)
 
 if __name__ == "__main__":
     # Test the script

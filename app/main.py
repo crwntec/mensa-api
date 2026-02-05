@@ -10,8 +10,8 @@ from typing import Generic, Optional, TypeVar
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
-from models import DayDict, HealthCheckResponse, MealDict, Mealplan
-from database import db_stats, fetch_day, fetch_meal, fetch_mealplan, init_db
+from models import *
+from database import *
 from scheduler import download_and_parse_pdf
 
 startup_time = time.time()
@@ -33,7 +33,7 @@ class ApiResponse(BaseModel, Generic[T]):
 app = FastAPI(
     title="mensa API", 
     description="API to retrieve meal plans (Speisenplan)", 
-    version="1.0.0"
+    version="1.0.1"
 )
 
 # Start scheduler
@@ -56,7 +56,7 @@ download_and_parse_pdf()
         404: {"description": "Meal plan not found"},
     }
 )
-def get_mealplan(week: int, year: int):
+def get_mealplan(year: int, week: int):
     """
     Retrieve the meal plan for a specific week and year.
     """

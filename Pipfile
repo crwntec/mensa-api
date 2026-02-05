@@ -8,6 +8,7 @@ pdfplumber = "*"
 requests = "*"
 apscheduler = "*"
 fastapi = {extras = ["standard"], version = "*"}
+bs4 = "*"
 
 [dev-packages]
 
