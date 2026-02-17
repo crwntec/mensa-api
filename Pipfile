@@ -20,6 +20,7 @@ sentence-transformers = "*"
 numpy = "*"
 torch = {version = "*", index = "pytorch-cpu"}
 torchvision = {version = "*", index = "pytorch-cpu"}
+typing-extensions = "*"
 
 [dev-packages]
 

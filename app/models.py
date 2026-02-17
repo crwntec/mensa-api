@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, TypedDict
-from datetime import datetime
+from typing import Any, Dict, List, Optional
+from typing_extensions import TypedDict
 
 class DatabaseStats(TypedDict):
     """Database statistics for health check"""
