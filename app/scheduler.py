@@ -3,6 +3,7 @@ import os
 import re
 import pdfplumber
 import requests
+from services.meal_intelligence import MealIntelligence
 from models import Mealplan
 from database import create_mealplan, fetch_mealplan
 from services.pdf_parser import extract_meals
@@ -46,7 +47,7 @@ def scrape_pdf_url():
         print(f"Scraping failed: No link found")
         return None
 
-def download_and_parse_pdf():
+def download_and_parse_pdf(intel: MealIntelligence):
     try:
         # 1. Determine the week range (e.g., 06 and 07)
         first_week, second_week = get_current_week_range()
@@ -88,7 +89,7 @@ def download_and_parse_pdf():
             
             week1_data = extract_meals(pdf.pages[0])  # Pass Page object directly
             if week1_data:
-                create_mealplan(Mealplan(year=year, week=first_week, days=week1_data.days))
+                create_mealplan(Mealplan(year=year, week=first_week, days=week1_data.days),intel=intel)
                 print(f"Stored Week {first_week} from {week1_filename}")
 
             # Process week 2 (page 1)  
@@ -99,7 +100,7 @@ def download_and_parse_pdf():
             
             week2_data = extract_meals(pdf.pages[1])
             if week2_data:
-                create_mealplan(Mealplan(year=year, week=second_week, days=week2_data.days))
+                create_mealplan(Mealplan(year=year, week=second_week, days=week2_data.days),intel=intel)
                 print(f"Stored Week {second_week} from {week2_filename}")
 
         # 5. Clean up temp file

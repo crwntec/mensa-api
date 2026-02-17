@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Optional, TypedDict
+from typing import Any, Dict, List, Optional, TypedDict
 from datetime import datetime
 
 class DatabaseStats(TypedDict):
@@ -21,10 +21,19 @@ class HealthCheckResponse(TypedDict):
     uptime_seconds: Optional[float]
     database: DatabaseStats
     scheduler: dict
+    embeddings: Dict[str, Any]
 class MealDict(TypedDict):
     """Meal information with database ID and name"""
     id: int
     name: str
+
+class MealAPIResponse(TypedDict):
+    id: int
+    name: str
+    num_servings: int
+    dates_served: Dict[str, str] # Serving date -> weekday
+    avg_distance: int
+    similar_meals: List[MealDict]
 
 class DayDict(TypedDict):
     """Day information with weekday and meals"""

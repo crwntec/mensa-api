@@ -1,7 +1,9 @@
 from datetime import datetime
 import os
 import sqlite3
-from models import MealDict, Mealplan
+from typing import List
+from services.meal_intelligence import MealIntelligence
+from models import MealAPIResponse, MealDict, Mealplan
 
 init_db_query = """
 CREATE TABLE IF NOT EXISTS mealplan (
@@ -178,7 +180,7 @@ def normalize_category(category_name):
     """
     return CATEGORY_MAPPING.get(category_name, category_name)
 
-def create_mealplan(data: Mealplan):
+def create_mealplan(data: Mealplan, intel: MealIntelligence):
     with connect_db() as conn:
         cursor = conn.cursor()
         try:
@@ -199,18 +201,29 @@ def create_mealplan(data: Mealplan):
                 
                 # Get or create meal IDs for each category
                 for category, meal_text in day_data["meals"].items():
+                    meal_id = None
+                    if intel:
+                        existing_id, similarity = intel.find_similar_meal(meal_text)
+                        if existing_id:
+                            print(f"    Found similar meal(sim={similarity:.3f}): {meal_text[:40]}")
+                            meal_id = existing_id
+                    
                     # Normalize the category name
                     normalized_category = normalize_category(category)
-                    
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO meal (name) VALUES (?)", 
-                        (meal_text,)
-                    )
-                    cursor.execute(
-                        "SELECT id FROM meal WHERE name = ?", 
-                        (meal_text,)
-                    )
-                    meal_ids[normalized_category] = cursor.fetchone()[0]
+                    if meal_id is None:
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO meal (name) VALUES (?)", 
+                            (meal_text,)
+                        )
+                        cursor.execute(
+                            "SELECT id FROM meal WHERE name = ?", 
+                            (meal_text,)
+                        )
+                        meal_id = cursor.fetchone()[0]
+                        if intel:
+                            new_embedding = intel.encode_meal(meal_text)
+                            intel.meal_embeddings[meal_id] = new_embedding
+                    meal_ids[normalized_category] = meal_id
                 
                 # Insert day with all meal IDs
                 cursor.execute("""
@@ -355,22 +368,70 @@ def fetch_day(datestring):
             conn.rollback()
             print(f"Fetching day failed: {e}")
             return None
+
+def search_meals_db(query_term: str, intel: MealIntelligence) -> List[MealDict]:
+    with connect_db() as conn:
+        cursor = conn.cursor()
         
-def fetch_meal(meal_id):
+        # Get semantic matches from embeddings
+        results = intel.find_top_similar_meals(query_term, top_k=10)
+        
+        if results:
+            meal_ids = [meal_id for meal_id, score in results]
+            placeholders = ','.join('?' * len(meal_ids))
+            cursor.execute(f"SELECT id, name FROM meal WHERE id IN ({placeholders})", meal_ids)
+            rows = cursor.fetchall()
+            # Return in similarity order, not DB order
+            id_to_row = {row['id']: row for row in rows}
+            return [MealDict(id=id_to_row[mid]['id'], name=id_to_row[mid]['name']) 
+                    for mid in meal_ids if mid in id_to_row]
+        
+        return []
+
+def fetch_meal(meal_id: int, intel: MealIntelligence):
     with connect_db() as conn:
         cursor = conn.cursor()
         try:
             cursor.execute("SELECT * FROM meal WHERE id = ?", (meal_id,))
-            row = cursor.fetchone()
+            meal_row = cursor.fetchone()
             
-            if not row:
+            if not meal_row:
                 return None
+
+            cursor.execute("""
+                SELECT date, weekday 
+                FROM day 
+                WHERE tagesgericht_id = ? 
+                   OR vegetarisch_id = ? 
+                   OR pizza_pasta_id = ? 
+                   OR wok_id = ?
+                ORDER BY date ASC
+            """, (meal_id, meal_id, meal_id, meal_id))
             
-            return MealDict(
-                id=row["id"],
-                name=row["name"]
+            days_rows = cursor.fetchall()
+            num_servings = len(days_rows)
+            
+            avg_distance = 0
+            if num_servings > 1:
+                sum_distance = 0
+                for i in range(num_servings - 1):
+                    d1 = datetime.strptime(days_rows[i]["date"], "%Y-%m-%d")
+                    d2 = datetime.strptime(days_rows[i+1]["date"], "%Y-%m-%d")
+                    sum_distance += (d2 - d1).days
+                avg_distance = round(sum_distance / (num_servings - 1))
+            
+            # Use meal name directly as semantic query, exclude self
+            similar_meals = search_meals_db(query_term=meal_row["name"], intel=intel)
+            similar_meals = [m for m in similar_meals if m["id"] != meal_id]
+
+            return MealAPIResponse(
+                id=meal_row["id"],
+                name=meal_row["name"],
+                num_servings=num_servings,
+                dates_served={row["date"]: row["weekday"] for row in days_rows},
+                avg_distance=avg_distance,
+                similar_meals=similar_meals
             )
         except Exception as e:
-            conn.rollback()
             print(f"Fetching meal failed: {e}")
             return None

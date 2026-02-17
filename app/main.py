@@ -7,7 +7,7 @@ Features:
 import logging
 from datetime import datetime
 import time
-from typing import Generic, Optional, TypeVar
+from typing import Generic, List, Optional, TypeVar
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -36,6 +36,7 @@ if not logger.handlers:
 
 startup_time = time.time()
 scheduler: BackgroundScheduler | None = None
+intel: MealIntelligence | None = None
 
 T = TypeVar('T')
 
@@ -49,19 +50,29 @@ class ApiResponse(BaseModel, Generic[T]):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global scheduler
+    global intel
 
     logger.info("Application startup initiated")
 
     try:
         logger.info("Initializing database schema")
         init_db()
+        logger.info("Database schema initialized")
+
+        logger.info("Initializing MealIntelligence")
+        intel = MealIntelligence()
+        logger.info("MealIntelligence initialized")
 
         logger.info("Configuring APScheduler (Europe/Berlin, daily at 07:00)")
         scheduler = BackgroundScheduler(timezone="Europe/Berlin")
-        scheduler.add_job(download_and_parse_pdf, "cron", hour=7, minute=0)
+        scheduler.add_job(
+            download_and_parse_pdf,
+            "cron", hour=7, minute=0,
+            kwargs={"intel": intel}
+        )
         scheduler.start()
         logger.info("APScheduler started with %d job(s)", len(scheduler.get_jobs()))
-
+        
         # logger.info("Triggering initial meal plan download")
         # ok = download_and_parse_pdf()
         # if not ok:
@@ -110,7 +121,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="mensa API",
     description="API to retrieve meal plans (Speisenplan)",
-    version="1.0.2",
+    version="1.0.3",
     lifespan=lifespan,
 )
     
@@ -152,8 +163,8 @@ def get_day(date: str):
     return {"success": True, "data": data}
 
 @app.get("/meal", 
-    summary="Retrieve meal for a specific day",
-    response_model=ApiResponse[MealDict],
+    summary="Retrieve meal by ID",
+    response_model=ApiResponse[MealAPIResponse],
     responses={
         200: {"description": "Meal retrieved successfully"},
         404: {"description": "Meal not found"},
@@ -162,9 +173,25 @@ def get_meal(meal_id: int):
     """
     Retrieve meal by ID
     """
-    data = fetch_meal(meal_id=meal_id)
+    data = fetch_meal(meal_id=meal_id, intel=intel)
     if not data:
         raise HTTPException(status_code=404, detail="Meal not found")
+    return {"success": True, "data": data}
+
+@app.get("/search", 
+    summary="Search for meals by name",
+    response_model=ApiResponse[List[MealDict]],
+    responses={
+        200: {"description": "Meals retrieved successfully"},
+        404: {"description": "Meals not found"},
+    })
+def search_meals(name: str):
+    """
+    Search for meals by name
+    """
+    data = search_meals_db(query_term=name, intel=intel)
+    if not data:
+        raise HTTPException(status_code=404, detail="Meals not found")
     return {"success": True, "data": data}
 
 @app.get("/health", response_model=ApiResponse[HealthCheckResponse])
@@ -202,7 +229,11 @@ def health_check():
             scheduler_jobs,
             stats.get("error"),
         )
-
+    embedding_stats = {
+        "indexed_meals": len(intel.meal_embeddings),
+        "cache_exists": os.path.exists(intel.cache_file),
+        "model_loaded": intel is not None,
+    }
     response = {
         "status": "healthy" if is_healthy else "unhealthy",
         "timestamp": datetime.now().isoformat(),
@@ -223,6 +254,7 @@ def health_check():
             "jobs_count": scheduler_jobs,
             "next_run": next_run,
         },
+        "embeddings": embedding_stats
     }
     if "error" in stats:
         response["database"]["error"] = stats["error"]
