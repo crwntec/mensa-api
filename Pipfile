@@ -3,6 +3,11 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
 
+[[source]]
+url = "https://download.pytorch.org/whl/cpu"
+verify_ssl = true
+name = "pytorch-cpu"
+
 [packages]
 pdfplumber = "*"
 requests = "*"
@@ -11,11 +16,12 @@ fastapi = {extras = ["standard"], version = "*"}
 bs4 = "*"
 openpyxl = "*"
 xlrd = "*"
-torch = {version = ">=2.5.0", index = "pytorch-cpu"}
 sentence-transformers = "*"
 numpy = "*"
+torch = {version = "*", index = "pytorch-cpu"}
+torchvision = {version = "*", index = "pytorch-cpu"}
 
 [dev-packages]
 
 [requires]
-python_version = "3.13"
+python_version = "3.11"
