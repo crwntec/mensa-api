@@ -81,6 +81,7 @@ class MealIntelligence:
                 print(f"Found {len(new_ids)} new meals to encode")
                 self._encode_and_store_meals(new_ids)
                 print(f"✓ Indexed all {len(self.meal_embeddings)} meals")
+                self.save_cache()
             else:
                 print("Cache is up to date")
                 return

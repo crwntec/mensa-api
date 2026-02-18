@@ -174,6 +174,8 @@ def get_meal(meal_id: int):
     """
     Retrieve meal by ID
     """
+    if not intel or not intel.meal_embeddings:
+        raise HTTPException(status_code=503, detail="Meal index not ready")
     data = fetch_meal(meal_id=meal_id, intel=intel)
     if not data:
         raise HTTPException(status_code=404, detail="Meal not found")
@@ -190,6 +192,8 @@ def search_meals(name: str):
     """
     Search for meals by name
     """
+    if not intel or not intel.meal_embeddings:
+        raise HTTPException(status_code=503, detail="Search index not ready")
     data = search_meals_db(query_term=name, intel=intel)
     if not data:
         raise HTTPException(status_code=404, detail="Meals not found")
