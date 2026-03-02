@@ -19,48 +19,37 @@ import pdfplumber
 from models import DayDict, Mealplan
 
 
-def extract_meals(pdf_path: str) -> Mealplan:
+def extract_meals(page) -> Mealplan:
     """
-    Extracts meals from a meal plan PDF using pdfplumber.
-    
-    Args:
-        pdf_path (str): Path to the PDF file.
-    Returns:
-        Mealplan: Parsed meal plan data.
+    Extracts meals from a single pdfplumber Page object.
     """
     all_days = {}
     week = None
     year = None
-    
-    with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text() or ""
-            
-            if week is None:
-                week_match = re.search(r"KW\s*(\d+)", text)
-                if week_match:
-                    week = int(week_match.group(1))
-            
-            if year is None:
-                date_match = re.search(r"\d{2}\.\d{2}\.\d{2,4}", text)
-                if date_match:
-                    parsed_date = datetime.strptime(date_match.group(), "%d.%m.%y")
-                    year = parsed_date.year
-                else:
-                    year = datetime.now().year
-            
-            for table in page.extract_tables() or []:
-                days = parse_table(table)
-                if days:
-                    all_days.update(days)
-    
+
+    text = page.extract_text() or ""
+
+    if week is None:
+        week_match = re.search(r"KW\s*(\d+)", text)
+        if week_match:
+            week = int(week_match.group(1))
+
+    if year is None:
+        date_match = re.search(r"\d{2}\.\d{2}\.\d{2,4}", text)
+        if date_match:
+            parsed_date = datetime.strptime(date_match.group(), "%d.%m.%y")
+            year = parsed_date.year
+        else:
+            year = datetime.now().year
+
+    for table in page.extract_tables() or []:
+        days = parse_table(table)
+        if days:
+            all_days.update(days)
+
     if all_days and week and year:
-        return Mealplan(
-            year=year,
-            week=week,
-            days=all_days
-        )
-    
+        return Mealplan(year=year, week=week, days=all_days)
+
     return None
 
 
