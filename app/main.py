@@ -24,6 +24,7 @@ from scheduler import download_and_parse_pdf
 # -----------------------------------------------------------------------------
 logger = logging.getLogger("mensa-api")
 logger.setLevel(logging.INFO)
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 # If no handlers are configured (e.g., when not run under uvicorn), add one
 if not logger.handlers:
@@ -46,6 +47,14 @@ class ApiResponse(BaseModel, Generic[T]):
     data: Optional[T] = None
     error: Optional[str] = None
 
+def pdf_job(intel):
+    logger = logging.getLogger("mensa-api")
+    logger.info("Scheduled PDF fetch starting")
+    ok = download_and_parse_pdf(intel=intel)
+    if ok:
+        logger.info("Scheduled PDF fetch completed successfully")
+    else:
+        logger.warning("Scheduled PDF fetch reported failure")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -67,7 +76,7 @@ async def lifespan(app: FastAPI):
         logger.info("Configuring APScheduler (Europe/Berlin, daily at 07:00)")
         scheduler = BackgroundScheduler(timezone="Europe/Berlin")
         scheduler.add_job(
-            download_and_parse_pdf,
+            pdf_job,
             "cron", hour=7, minute=0,
             kwargs={"intel": intel}
         )
@@ -122,7 +131,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="mensa API",
     description="API to retrieve meal plans (Speisenplan)",
-    version="1.1.1",
+    version="1.1.2",
     lifespan=lifespan,
 )
     
@@ -198,6 +207,16 @@ def search_meals(name: str):
     if not data:
         raise HTTPException(status_code=404, detail="Meals not found")
     return {"success": True, "data": data}
+
+@app.post("/admin/trigger-fetch")
+def trigger_fetch():
+    logger.info("Manual PDF fetch triggered")
+    ok = download_and_parse_pdf(intel=intel)
+    if ok:
+        logger.info("Manual PDF fetch completed successfully")
+    else:
+        logger.warning("Manual PDF fetch reported failure")
+    return {"success": ok}
 
 @app.get("/health", response_model=ApiResponse[HealthCheckResponse])
 def health_check():
