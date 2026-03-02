@@ -84,22 +84,12 @@ def download_and_parse_pdf(intel: MealIntelligence):
                 os.remove(temp_filename)
                 return False
 
-            week1_filename = f"KW{str(first_week).zfill(2)}.pdf"
-            week1_path = os.path.join(save_dir, week1_filename)
-            with open(week1_path, "wb") as f:
-                f.write(pdf.pages[0].to_image().original)
-
             week1_data = extract_meals(pdf.pages[0])
             if week1_data:
                 create_mealplan(Mealplan(year=year, week=first_week, days=week1_data.days), intel=intel)
                 logger.info("Stored week %s from %s (%d days)", first_week, week1_filename, len(week1_data.days))
             else:
                 logger.warning("No meal data extracted for week %s (page 0)", first_week)
-
-            week2_filename = f"KW{str(second_week).zfill(2)}.pdf"
-            week2_path = os.path.join(save_dir, week2_filename)
-            with open(week2_path, "wb") as f:
-                f.write(pdf.pages[1].to_image().original)
 
             week2_data = extract_meals(pdf.pages[1])
             if week2_data:
@@ -108,7 +98,6 @@ def download_and_parse_pdf(intel: MealIntelligence):
             else:
                 logger.warning("No meal data extracted for week %s (page 1)", second_week)
 
-        os.remove(temp_filename)
         return True
 
     except requests.HTTPError as e:
