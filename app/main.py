@@ -131,7 +131,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="mensa API",
     description="API to retrieve meal plans (Speisenplan)",
-    version="1.1.2",
+    version="1.1.3",
     lifespan=lifespan,
 )
     
